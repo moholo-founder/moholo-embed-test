@@ -134,9 +134,8 @@
   let avatarReady = false, speaking = false;
   if (!window.Moholo) { log('ERROR: window.Moholo missing - embed.js did not load in client mode'); dot('dAvatar', 'err'); return; }
   Moholo.on('ready', m => { avatarReady = true; dot('dAvatar', 'on'); log('avatar ready', m.avatar ? { avatar: m.avatar, fps: m.fps } : ''); });
-  Moholo.on('speaking-start', () => { speaking = true; dot('dSpeak', 'on'); });
-  Moholo.on('speaking-end', () => { speaking = false; dot('dSpeak', ''); });
-  Moholo.on('thinking', () => dot('dSpeak', 'busy'));
+  Moholo.on('speaking', m => { speaking = !!m.on; dot('dSpeak', speaking ? 'on' : ''); });
+  Moholo.on('state', m => { if (m.state === 'thinking') dot('dSpeak', 'busy'); });
   Moholo.on('error', m => { log('avatar error:', m && m.message); });
   Moholo.on('utterance', m => {
     log(`visitor spoke ${m.seconds}s (${m.pcm.byteLength} bytes @16k)`);
@@ -144,7 +143,7 @@
     sendUtterance(m.pcm);
   });
   const onTyped = m => { log('visitor typed:', m.text); if (speaking) Moholo.stop(); sendText(m.text); };
-  Moholo.on('text', onTyped); Moholo.on('user-text', onTyped);   // embed docs say 'text'; the iframe emits 'user-text' - accept both
+  Moholo.on('text', onTyped);
 
   // ---- Gemini Live side: raw BidiGenerateContent WebSocket, straight from the browser
   const WS_URL = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';
