@@ -44,12 +44,19 @@
   <div class="wrap">
     <div>
       <!-- Moholo.ai avatar, BYO-LLM mode -->
-      <!-- ?avatar=karim (ana, karim, selam, arjan, mei, nora, lukas, ingrid, hana, arun); the tag is written at load so embed.js sees data-avatar -->
+      <!-- ?avatar=karim (ana, karim, selam, arjan, mei, nora, lukas, ingrid, hana, arun). The embed tag is inserted with
+           createElement (not document.write, which Chrome may block for cross-site scripts); embed.js reads data-* from
+           document.currentScript, which is set for dynamically inserted classic scripts too. -->
+      <div id="avatarSlot"></div>
       <script>
         (function () {
           var a = (new URLSearchParams(location.search).get('avatar') || '').replace(/[^a-z0-9_-]/gi, '');
-          document.write('<script src="https://moholo.ai/embed.js" data-key="mk_5Zs47e0SBljJ" data-llm="client" data-captions="1" data-width="420" data-height="560"'
-            + (a ? ' data-avatar="' + a + '"' : '') + '><\/script>');
+          var s = document.createElement('script');
+          s.src = 'https://moholo.ai/embed.js';
+          s.dataset.key = 'mk_5Zs47e0SBljJ'; s.dataset.llm = 'client'; s.dataset.captions = '1';
+          s.dataset.width = '420'; s.dataset.height = '560';
+          if (a) s.dataset.avatar = a;
+          document.getElementById('avatarSlot').appendChild(s);
         })();
       </script>
       <p class="note" id="avatarPick"></p>
