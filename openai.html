@@ -56,7 +56,7 @@
           s.dataset.key = 'mk_5Zs47e0SBljJ'; s.dataset.llm = 'client'; s.dataset.captions = '1';
           s.dataset.width = '420'; s.dataset.height = '560';
           if (a) s.dataset.avatar = a;
-          document.getElementById('avatarSlot').appendChild(s);
+          window.__moholoTag = s; document.getElementById('avatarSlot').appendChild(s);
         })();
       </script>
       <p class="note" id="avatarPick"></p>
@@ -104,7 +104,7 @@
   </div>
 
 <script>
-(function () {
+function initPage() {
   'use strict';
   const $ = id => document.getElementById(id);
   const logEl = $('log');
@@ -212,7 +212,11 @@
     $('avatarPick').innerHTML = 'avatar: ' + ['ana','karim','selam','arjan','mei','nora','lukas','ingrid','hana','arun'].map(a =>
       a === cur ? '<b>' + a + '</b>' : '<a href="?avatar=' + a + '">' + a + '</a>').join(' · '); })();
   log('page ready - waiting for the avatar (on-device driver)…');
-})();
+}
+// embed.js is inserted dynamically (see the avatar slot above), so it executes after this inline script: wait for it
+if (window.Moholo) initPage();
+else if (window.__moholoTag) { window.__moholoTag.addEventListener('load', initPage); window.__moholoTag.addEventListener('error', () => { document.getElementById('log').textContent += 'ERROR: embed.js failed to load\n'; }); }
+else initPage();
 </script>
 </body>
 </html>
