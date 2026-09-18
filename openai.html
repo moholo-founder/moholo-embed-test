@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Moholo × OpenAI Realtime (browser only)</title>
+  <style>
+    :root { --bg: #0f1115; --panel: #171a21; --fg: #e8e8ea; --muted: #9a9aa3; --accent: #10a37f; --ok: #3ddc84; --err: #ff5c5c; --line: #262a33; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--fg);
+           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 16px; }
+    header { max-width: 1100px; margin: 0 auto 16px; }
+    h1 { font-size: 1.5rem; margin: 0 0 .25rem; }
+    header p { color: var(--muted); margin: 0; line-height: 1.5; font-size: .95rem; }
+    a { color: var(--accent); }
+    .wrap { max-width: 1100px; margin: 0 auto; display: grid; grid-template-columns: 420px 1fr; gap: 20px; align-items: start; }
+    @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } }
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+    label { display: block; font-size: .8rem; color: var(--muted); margin: 12px 0 4px; }
+    input, textarea, select { width: 100%; background: #0f1115; color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: inherit; font-size: .9rem; }
+    textarea { min-height: 70px; resize: vertical; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    button { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 8px 14px; font: inherit; cursor: pointer; }
+    button.secondary { background: #262a33; }
+    button:disabled { opacity: .45; cursor: default; }
+    .status { display: flex; gap: 14px; font-size: .8rem; color: var(--muted); margin-top: 12px; }
+    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #555; margin-right: 5px; vertical-align: middle; }
+    .dot.on { background: var(--ok); } .dot.err { background: var(--err); } .dot.busy { background: #f5c451; }
+    pre#log { background: #0b0d11; border: 1px solid var(--line); border-radius: 8px; padding: 10px; height: 240px; overflow: auto;
+              font-size: .75rem; line-height: 1.45; margin: 12px 0 0; white-space: pre-wrap; color: #c7c7cf; }
+    pre.cmd { background: #0b0d11; border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-size: .72rem; overflow: auto; white-space: pre-wrap; color: #c7c7cf; margin: 6px 0 0; }
+    .note { font-size: .78rem; color: var(--muted); margin-top: 10px; line-height: 1.5; }
+    code { background: #1c1f26; padding: 1px 5px; border-radius: 4px; font-size: .85em; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Moholo avatar + OpenAI Realtime — 100% in the browser</h1>
+    <p>Moholo in <code>data-llm="client"</code> mode animates audio this page hands it. The audio comes from an
+       <strong>OpenAI Realtime WebSocket opened directly from this tab</strong>. No server in the middle; Moholo never sees the audio, the text or your key.
+       <a href="./">hosted-mode test</a> · <a href="gemini.html">Gemini Live version</a></p>
+  </header>
+
+  <div class="wrap">
+    <div>
+      <!-- Moholo.ai avatar, BYO-LLM mode -->
+      <script src="https://moholo.ai/embed.js"
+              data-key="mk_5Zs47e0SBljJ"
+              data-llm="client"
+              data-captions="1"
+              data-width="420" data-height="560"></script>
+    </div>
+
+    <div class="panel">
+      <label for="apiKey">OpenAI ephemeral client secret (<code>ek_…</code>) — mint one with your real key in a terminal, paste it here</label>
+      <input id="apiKey" type="password" placeholder="ek_…" autocomplete="off">
+      <pre class="cmd">curl -s https://api.openai.com/v1/realtime/client_secrets \
+  -H "Authorization: Bearer $OPENAI_API_KEY" -H "Content-Type: application/json" \
+  -d '{"expires_after":{"anchor":"created_at","seconds":1800},"session":{"type":"realtime","model":"gpt-realtime"}}' \
+  | python3 -c 'import sys,json; print(json.load(sys.stdin)["value"])'</pre>
+
+      <label for="model">Model</label>
+      <input id="model" value="gpt-realtime" list="models">
+      <datalist id="models"><option value="gpt-realtime"><option value="gpt-realtime-mini"><option value="gpt-4o-realtime-preview"></datalist>
+
+      <label for="voice">Voice</label>
+      <select id="voice">
+        <option>marin</option><option>cedar</option><option>alloy</option><option>ash</option><option>ballad</option>
+        <option>coral</option><option>echo</option><option>sage</option><option>shimmer</option><option>verse</option>
+      </select>
+
+      <label for="prompt">Instructions</label>
+      <textarea id="prompt">You are a friendly assistant speaking through a lifelike avatar. Keep answers short — one or two sentences — and conversational.</textarea>
+
+      <div class="row">
+        <button id="connect">Connect to OpenAI Realtime</button>
+        <button id="disconnect" class="secondary" disabled>Disconnect</button>
+        <button id="mic" class="secondary" disabled>Mic on</button>
+        <button id="stop" class="secondary" disabled>Interrupt</button>
+      </div>
+      <div class="row"><input id="typed" placeholder="or type something and press Enter" disabled></div>
+
+      <div class="status">
+        <span><i class="dot" id="dAvatar"></i>avatar</span>
+        <span><i class="dot" id="dLlm"></i>openai</span>
+        <span><i class="dot" id="dSpeak"></i>speaking</span>
+      </div>
+      <pre id="log"></pre>
+      <p class="note">Flow: visitor speaks → Moholo emits <code>utterance</code> (int16 16 kHz) → resampled to 24 kHz → <code>input_audio_buffer.append/commit</code> + <code>response.create</code> →
+        OpenAI streams <code>response.output_audio.delta</code> (int16 24 kHz) → <code>Moholo.speak()</code> per chunk → <code>Moholo.end()</code> on <code>response.done</code>.
+        Manual turn-taking (<code>turn_detection: null</code>) because Moholo already segments speech by silence.</p>
+    </div>
+  </div>
+
+<script>
+(function () {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const logEl = $('log');
+  const log = (...a) => { const t = new Date().toISOString().slice(11, 23);
+    logEl.textContent += `${t} ${a.map(x => typeof x === 'string' ? x : JSON.stringify(x)).join(' ')}\n`;
+    logEl.scrollTop = logEl.scrollHeight; };
+  const dot = (id, cls) => { $(id).className = 'dot' + (cls ? ' ' + cls : ''); };
+
+  // ---- PCM helpers
+  const b64ToInt16 = (b64) => { const bin = atob(b64); const n = bin.length - (bin.length % 2);
+    const bytes = new Uint8Array(n); for (let i = 0; i < n; i++) bytes[i] = bin.charCodeAt(i); return new Int16Array(bytes.buffer); };
+  const bufToB64 = (buf) => { const bytes = new Uint8Array(buf); let s = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s); };
+  const resample16to24 = (i16) => {   // linear interpolation; OpenAI Realtime accepts pcm16 at 24 kHz only
+    const out = new Int16Array(Math.floor(i16.length * 1.5));
+    for (let j = 0; j < out.length; j++) { const p = j / 1.5, k = Math.floor(p), f = p - k;
+      out[j] = i16[k] * (1 - f) + (i16[Math.min(k + 1, i16.length - 1)] || 0) * f; }
+    return out;
+  };
+
+  // ---- Moholo side
+  let speaking = false;
+  if (!window.Moholo) { log('ERROR: window.Moholo missing - embed.js did not load in client mode'); dot('dAvatar', 'err'); return; }
+  Moholo.on('ready', m => { dot('dAvatar', 'on'); log('avatar ready', { avatar: m.avatar, driver: m.driver && m.driver.engine, webgpu: m.webgpu }); });
+  Moholo.on('speaking', m => { speaking = !!m.on; dot('dSpeak', speaking ? 'on' : ''); });
+  Moholo.on('state', m => { if (m.state === 'thinking') dot('dSpeak', 'busy'); });
+  Moholo.on('error', m => log('avatar error:', m && m.message));
+  Moholo.on('utterance', m => {
+    log(`visitor spoke ${m.seconds}s (${m.pcm.byteLength} bytes @16k)`);
+    if (speaking) { Moholo.stop(); wsSend({ type: 'response.cancel' }); }   // barge-in
+    sendUtterance(m.pcm);
+  });
+  const onTyped = m => { log('visitor typed:', m.text); if (speaking) { Moholo.stop(); wsSend({ type: 'response.cancel' }); } sendText(m.text); };
+  Moholo.on('text', onTyped);
+
+  // ---- OpenAI Realtime side: raw WebSocket from the browser, auth via subprotocol
+  let ws = null, ready = false, caption = '', micOn = false;
+  const wsSend = (obj) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); else log('not connected - dropped', obj.type); };
+
+  const sendUtterance = (pcm16k) => {
+    if (!ready) return;
+    const pcm24 = resample16to24(new Int16Array(pcm16k));
+    const bytes = new Uint8Array(pcm24.buffer), CH = 48000;   // ~1 s of 24 kHz int16 per event
+    for (let i = 0; i < bytes.length; i += CH) wsSend({ type: 'input_audio_buffer.append', audio: bufToB64(bytes.slice(i, i + CH).buffer) });
+    wsSend({ type: 'input_audio_buffer.commit' });
+    wsSend({ type: 'response.create' });
+  };
+  const sendText = (text) => {
+    if (!ready || !text) return;
+    wsSend({ type: 'conversation.item.create', item: { type: 'message', role: 'user', content: [{ type: 'input_text', text }] } });
+    wsSend({ type: 'response.create' });
+  };
+
+  const handleEvent = (ev) => {
+    switch (ev.type) {
+      case 'session.created':
+        log('session created', ev.session && ev.session.model);
+        wsSend({ type: 'session.update', session: {
+          type: 'realtime', output_modalities: ['audio'], instructions: $('prompt').value,
+          audio: { input: { format: { type: 'audio/pcm', rate: 24000 }, turn_detection: null },   // we commit per Moholo utterance
+                   output: { format: { type: 'audio/pcm', rate: 24000 }, voice: $('voice').value } } } });
+        return;
+      case 'session.updated':
+        ready = true; dot('dLlm', 'on'); log('session updated - ready');
+        Moholo.status && Moholo.status('openai realtime');
+        ['disconnect', 'mic', 'stop', 'typed'].forEach(id => $(id).disabled = false); $('connect').disabled = true;
+        sendText('(The visitor just arrived. Greet them in one short sentence.)');
+        return;
+      case 'response.output_audio.delta': case 'response.audio.delta':   // GA name / beta name
+        Moholo.speak(b64ToInt16(ev.delta), 24000);                        // hand the chunk to the avatar: it plays + lip-syncs on-device
+        return;
+      case 'response.output_audio_transcript.delta': case 'response.audio_transcript.delta':
+        caption += ev.delta; Moholo.caption(caption); return;
+      case 'response.done':
+        Moholo.end(); log('response done', caption ? `"${caption.trim()}"` : '', ev.response && ev.response.status !== 'completed' ? ev.response.status : '');
+        caption = ''; return;
+      case 'error':
+        dot('dLlm', 'err'); log('openai error:', ev.error && (ev.error.message || ev.error)); return;
+      default:
+        if (/^(response\.(created|output_item|content_part|output_audio\.done|output_audio_transcript\.done)|conversation\.item|input_audio_buffer|rate_limits)/.test(ev.type)) return;   // chatter
+        log('event', ev.type);
+    }
+  };
+
+  const connect = () => {
+    const key = $('apiKey').value.trim(); if (!key) { log('paste an ephemeral client secret (ek_…) first'); $('apiKey').focus(); return; }
+    const model = $('model').value.trim();
+    dot('dLlm', 'busy'); log('connecting to OpenAI Realtime:', model);
+    // browsers cannot set Authorization headers on WebSockets; OpenAI accepts the key as a subprotocol
+    ws = new WebSocket('wss://api.openai.com/v1/realtime?model=' + encodeURIComponent(model), ['realtime', 'openai-insecure-api-key.' + key]);
+    ws.onopen = () => log('ws open');
+    ws.onmessage = (e) => { try { handleEvent(JSON.parse(e.data)); } catch (err) { log('bad event', String(err)); } };
+    ws.onerror = () => { dot('dLlm', 'err'); log('ws error (expired/invalid secret or model name; see browser console)'); };
+    ws.onclose = (ev) => { dot('dLlm', ''); ready = false; log(`ws closed ${ev.code} ${ev.reason || ''}`.trim());
+      ['disconnect', 'mic', 'stop', 'typed'].forEach(id => $(id).disabled = true); $('connect').disabled = false;
+      if (micOn) { Moholo.mic(false); micOn = false; $('mic').textContent = 'Mic on'; } };
+  };
+
+  $('connect').onclick = connect;
+  $('disconnect').onclick = () => { if (ws) ws.close(1000, 'user'); Moholo.stop(); };
+  $('stop').onclick = () => { Moholo.stop(); wsSend({ type: 'response.cancel' }); };
+  $('mic').onclick = () => { micOn = !micOn; Moholo.mic(micOn); $('mic').textContent = micOn ? 'Mic off' : 'Mic on'; log('mic', micOn ? 'on' : 'off'); };
+  $('typed').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.value.trim()) { onTyped({ text: e.target.value.trim() }); e.target.value = ''; } });
+  log('page ready - waiting for the avatar (on-device driver)…');
+})();
+</script>
+</body>
+</html>
