@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Moholo × Gemini Live (browser only)</title>
+  <style>
+    :root { --bg: #0f1115; --panel: #171a21; --fg: #e8e8ea; --muted: #9a9aa3; --accent: #7c5cff; --ok: #3ddc84; --err: #ff5c5c; --line: #262a33; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--fg);
+           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 16px; }
+    header { max-width: 1100px; margin: 0 auto 16px; }
+    h1 { font-size: 1.5rem; margin: 0 0 .25rem; }
+    header p { color: var(--muted); margin: 0; line-height: 1.5; font-size: .95rem; }
+    .wrap { max-width: 1100px; margin: 0 auto; display: grid; grid-template-columns: 420px 1fr; gap: 20px; align-items: start; }
+    @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } }
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+    label { display: block; font-size: .8rem; color: var(--muted); margin: 12px 0 4px; }
+    input, textarea, select { width: 100%; background: #0f1115; color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: inherit; font-size: .9rem; }
+    textarea { min-height: 70px; resize: vertical; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    button { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 8px 14px; font: inherit; cursor: pointer; }
+    button.secondary { background: #262a33; }
+    button:disabled { opacity: .45; cursor: default; }
+    .check { display: flex; align-items: center; gap: 6px; font-size: .8rem; color: var(--muted); margin-top: 8px; }
+    .check input { width: auto; }
+    .status { display: flex; gap: 14px; font-size: .8rem; color: var(--muted); margin-top: 12px; }
+    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #555; margin-right: 5px; vertical-align: middle; }
+    .dot.on { background: var(--ok); } .dot.err { background: var(--err); } .dot.busy { background: #f5c451; }
+    pre#log { background: #0b0d11; border: 1px solid var(--line); border-radius: 8px; padding: 10px; height: 260px; overflow: auto;
+              font-size: .75rem; line-height: 1.45; margin: 12px 0 0; white-space: pre-wrap; color: #c7c7cf; }
+    .note { font-size: .78rem; color: var(--muted); margin-top: 10px; line-height: 1.5; }
+    code { background: #1c1f26; padding: 1px 5px; border-radius: 4px; font-size: .85em; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Moholo avatar + Gemini Live — 100% in the browser</h1>
+    <p>Moholo runs in <code>data-llm="client"</code> mode: the head renders and lip-syncs on this device (ONNX driver), and this page
+       supplies the reply audio. Audio comes from a <strong>Gemini Live WebSocket opened directly from this tab</strong> — no server of ours in the middle.
+       Your key stays in this browser. <a href="./" style="color:var(--accent)">Hosted-mode test page →</a></p>
+  </header>
+
+  <div class="wrap">
+    <div>
+      <!-- Moholo.ai avatar, BYO-LLM mode: no Moholo model, no server session; this page hands over the audio -->
+      <script src="https://moholo.ai/embed.js"
+              data-key="mk_5Zs47e0SBljJ"
+              data-llm="client"
+              data-captions="1"
+              data-width="420" data-height="560"></script>
+    </div>
+
+    <div class="panel">
+      <label for="apiKey">Gemini API key (typed here at runtime — not in the page source)</label>
+      <input id="apiKey" type="password" placeholder="AIza…" autocomplete="off">
+      <div class="check"><input id="remember" type="checkbox"><label for="remember" style="margin:0">remember key on this device (localStorage)</label></div>
+
+      <label for="model">Model</label>
+      <input id="model" value="gemini-2.5-flash-native-audio-preview-09-2025" list="models">
+      <datalist id="models">
+        <option value="gemini-2.5-flash-native-audio-preview-09-2025">
+        <option value="gemini-2.5-flash-preview-native-audio-dialog">
+        <option value="gemini-live-2.5-flash-preview">
+      </datalist>
+
+      <label for="voice">Gemini voice</label>
+      <select id="voice">
+        <option>Kore</option><option>Aoede</option><option>Leda</option><option>Puck</option>
+        <option>Charon</option><option>Fenrir</option><option>Zephyr</option><option>Orus</option>
+      </select>
+
+      <label for="prompt">System prompt</label>
+      <textarea id="prompt">You are a friendly assistant speaking through a lifelike avatar. Keep answers short — one or two sentences — and conversational.</textarea>
+      <div class="check"><input id="greet" type="checkbox" checked><label for="greet" style="margin:0">greet the visitor when connected</label></div>
+
+      <div class="row">
+        <button id="connect">Connect to Gemini Live</button>
+        <button id="disconnect" class="secondary" disabled>Disconnect</button>
+        <button id="mic" class="secondary" disabled>Mic on</button>
+        <button id="stop" class="secondary" disabled>Interrupt</button>
+      </div>
+      <div class="row">
+        <input id="typed" placeholder="or type something and press Enter" disabled>
+      </div>
+
+      <div class="status">
+        <span><i class="dot" id="dAvatar"></i>avatar</span>
+        <span><i class="dot" id="dGemini"></i>gemini</span>
+        <span><i class="dot" id="dSpeak"></i>speaking</span>
+      </div>
+      <pre id="log"></pre>
+      <p class="note">Flow: visitor speaks → Moholo VAD emits <code>utterance</code> (int16 16 kHz) → sent as <code>realtimeInput.audio</code> →
+        Gemini streams <code>inlineData</code> PCM (int16 24 kHz) → <code>Moholo.speak()</code> per chunk → <code>Moholo.end()</code> on <code>turnComplete</code>.
+        Tip: restrict this key to the <code>https://moholo-founder.github.io</code> referrer in Google AI Studio; for production use an ephemeral token.</p>
+    </div>
+  </div>
+
+<script>
+(function () {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const logEl = $('log');
+  const log = (...a) => { const t = new Date().toISOString().slice(11, 23);
+    logEl.textContent += `${t} ${a.map(x => typeof x === 'string' ? x : JSON.stringify(x)).join(' ')}\n`;
+    logEl.scrollTop = logEl.scrollHeight; };
+  const dot = (id, cls) => { $(id).className = 'dot' + (cls ? ' ' + cls : ''); };
+
+  // ---- key persistence (user's choice; sessionStorage by default so a page reload keeps it, localStorage if 'remember')
+  try {
+    const saved = localStorage.getItem('gemini_key') || sessionStorage.getItem('gemini_key');
+    if (saved) $('apiKey').value = saved;
+    $('remember').checked = !!localStorage.getItem('gemini_key');
+  } catch (e) {}
+  const persistKey = () => { try {
+    const k = $('apiKey').value.trim();
+    if ($('remember').checked) { localStorage.setItem('gemini_key', k); sessionStorage.removeItem('gemini_key'); }
+    else { localStorage.removeItem('gemini_key'); sessionStorage.setItem('gemini_key', k); }
+  } catch (e) {} };
+
+  // ---- PCM helpers
+  const b64ToInt16 = (b64) => {
+    const bin = atob(b64); const n = bin.length - (bin.length % 2);
+    const bytes = new Uint8Array(n); for (let i = 0; i < n; i++) bytes[i] = bin.charCodeAt(i);
+    return new Int16Array(bytes.buffer);
+  };
+  const bufToB64 = (buf) => {
+    const bytes = new Uint8Array(buf); let s = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(s);
+  };
+
+  // ---- Moholo side (window.Moholo is created by embed.js in data-llm="client" mode)
+  let avatarReady = false, speaking = false;
+  if (!window.Moholo) { log('ERROR: window.Moholo missing - embed.js did not load in client mode'); dot('dAvatar', 'err'); return; }
+  Moholo.on('ready', m => { avatarReady = true; dot('dAvatar', 'on'); log('avatar ready', m.avatar ? { avatar: m.avatar, fps: m.fps } : ''); });
+  Moholo.on('speaking-start', () => { speaking = true; dot('dSpeak', 'on'); });
+  Moholo.on('speaking-end', () => { speaking = false; dot('dSpeak', ''); });
+  Moholo.on('thinking', () => dot('dSpeak', 'busy'));
+  Moholo.on('error', m => { log('avatar error:', m && m.message); });
+  Moholo.on('utterance', m => {
+    log(`visitor spoke ${m.seconds}s (${m.pcm.byteLength} bytes @16k)`);
+    if (speaking) Moholo.stop();               // barge-in: cut the avatar off locally right away
+    sendUtterance(m.pcm);
+  });
+  const onTyped = m => { log('visitor typed:', m.text); if (speaking) Moholo.stop(); sendText(m.text); };
+  Moholo.on('text', onTyped); Moholo.on('user-text', onTyped);   // embed docs say 'text'; the iframe emits 'user-text' - accept both
+
+  // ---- Gemini Live side: raw BidiGenerateContent WebSocket, straight from the browser
+  const WS_URL = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';
+  let ws = null, setupDone = false, caption = '', micOn = false;
+
+  const wsSend = (obj) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); else log('not connected - dropped', Object.keys(obj)[0]); };
+
+  const sendUtterance = (pcmBuf) => {
+    if (!setupDone) return;
+    // manual activity detection: one Moholo utterance = one explicit activity, so Gemini answers immediately (no waiting for silence)
+    wsSend({ realtimeInput: { activityStart: {} } });
+    const bytes = new Uint8Array(pcmBuf), CH = 32000;   // ~1 s of 16 kHz int16 per frame
+    for (let i = 0; i < bytes.length; i += CH)
+      wsSend({ realtimeInput: { audio: { data: bufToB64(bytes.slice(i, i + CH).buffer), mimeType: 'audio/pcm;rate=16000' } } });
+    wsSend({ realtimeInput: { activityEnd: {} } });
+  };
+  const sendText = (text) => {
+    if (!setupDone || !text) return;
+    wsSend({ clientContent: { turns: [{ role: 'user', parts: [{ text }] }], turnComplete: true } });
+  };
+
+  const handleServer = (msg) => {
+    if (msg.setupComplete) {
+      setupDone = true; dot('dGemini', 'on'); log('gemini: setup complete');
+      Moholo.status && Moholo.status('gemini live');
+      ['disconnect', 'mic', 'stop', 'typed'].forEach(id => $(id).disabled = false); $('connect').disabled = true;
+      if ($('greet').checked) sendText('(The visitor just arrived. Greet them in one short sentence.)');
+      return;
+    }
+    if (msg.goAway) { log('gemini: goAway', msg.goAway); return; }
+    if (msg.usageMetadata && !msg.serverContent) return;
+    const sc = msg.serverContent; if (!sc) { log('gemini:', msg); return; }
+    if (sc.interrupted) { log('gemini: interrupted'); Moholo.stop(); caption = ''; return; }
+    if (sc.inputTranscription && sc.inputTranscription.text) log('heard:', sc.inputTranscription.text);
+    if (sc.outputTranscription && sc.outputTranscription.text) { caption += sc.outputTranscription.text; Moholo.caption(caption); }
+    const parts = (sc.modelTurn && sc.modelTurn.parts) || [];
+    for (const p of parts) {
+      if (p.inlineData && p.inlineData.data) {
+        const rate = +((/rate=(\d+)/.exec(p.inlineData.mimeType || '') || [])[1] || 24000);
+        const pcm = b64ToInt16(p.inlineData.data);
+        Moholo.speak(pcm, rate);                      // hand this chunk to the avatar: it lip-syncs + plays it
+      } else if (p.text) { caption += p.text; Moholo.caption(caption); }
+    }
+    if (sc.turnComplete) { Moholo.end(); log('gemini: turn complete', caption ? `"${caption.trim()}"` : ''); caption = ''; }
+  };
+
+  const connect = () => {
+    const key = $('apiKey').value.trim(); if (!key) { log('paste a Gemini API key first'); $('apiKey').focus(); return; }
+    persistKey();
+    const model = $('model').value.trim();
+    dot('dGemini', 'busy'); log('connecting to Gemini Live:', model);
+    ws = new WebSocket(WS_URL + '?key=' + encodeURIComponent(key));
+    ws.binaryType = 'blob';
+    ws.onopen = () => {
+      log('ws open - sending setup');
+      wsSend({ setup: {
+        model: 'models/' + model,
+        generationConfig: { responseModalities: ['AUDIO'],
+          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: $('voice').value } } } },
+        systemInstruction: { parts: [{ text: $('prompt').value }] },
+        realtimeInputConfig: { automaticActivityDetection: { disabled: true } },   // we mark activity per Moholo utterance
+        inputAudioTranscription: {}, outputAudioTranscription: {}
+      } });
+    };
+    ws.onmessage = async (ev) => {
+      try { const txt = ev.data instanceof Blob ? await ev.data.text() : ev.data; handleServer(JSON.parse(txt)); }
+      catch (e) { log('bad message', String(e)); }
+    };
+    ws.onerror = () => { dot('dGemini', 'err'); log('ws error (check the key / model name; details are in the browser console)'); };
+    ws.onclose = (ev) => { dot('dGemini', ''); setupDone = false; log(`ws closed ${ev.code} ${ev.reason || ''}`.trim());
+      ['disconnect', 'mic', 'stop', 'typed'].forEach(id => $(id).disabled = true); $('connect').disabled = false;
+      if (micOn) { Moholo.mic(false); micOn = false; $('mic').textContent = 'Mic on'; } };
+  };
+
+  $('connect').onclick = connect;
+  $('disconnect').onclick = () => { if (ws) ws.close(1000, 'user'); Moholo.stop(); };
+  $('stop').onclick = () => { Moholo.stop(); };
+  $('mic').onclick = () => { micOn = !micOn; Moholo.mic(micOn); $('mic').textContent = micOn ? 'Mic off' : 'Mic on'; log('mic', micOn ? 'on' : 'off'); };
+  $('typed').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.value.trim()) { onTyped({ text: e.target.value.trim() }); e.target.value = ''; } });
+  $('remember').onchange = persistKey;
+  log('page ready - waiting for the avatar (ONNX driver loads on-device)…');
+})();
+</script>
+</body>
+</html>
