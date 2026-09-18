@@ -44,11 +44,15 @@
   <div class="wrap">
     <div>
       <!-- Moholo.ai avatar, BYO-LLM mode -->
-      <script src="https://moholo.ai/embed.js"
-              data-key="mk_5Zs47e0SBljJ"
-              data-llm="client"
-              data-captions="1"
-              data-width="420" data-height="560"></script>
+      <!-- ?avatar=karim (ana, karim, selam, arjan, mei, nora, lukas, ingrid, hana, arun); the tag is written at load so embed.js sees data-avatar -->
+      <script>
+        (function () {
+          var a = (new URLSearchParams(location.search).get('avatar') || '').replace(/[^a-z0-9_-]/gi, '');
+          document.write('<script src="https://moholo.ai/embed.js" data-key="mk_5Zs47e0SBljJ" data-llm="client" data-captions="1" data-width="420" data-height="560"'
+            + (a ? ' data-avatar="' + a + '"' : '') + '><\/script>');
+        })();
+      </script>
+      <p class="note" id="avatarPick"></p>
     </div>
 
     <div class="panel">
@@ -197,6 +201,9 @@
   $('stop').onclick = () => { Moholo.stop(); wsSend({ type: 'response.cancel' }); };
   $('mic').onclick = () => { micOn = !micOn; Moholo.mic(micOn); $('mic').textContent = micOn ? 'Mic off' : 'Mic on'; log('mic', micOn ? 'on' : 'off'); };
   $('typed').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.value.trim()) { onTyped({ text: e.target.value.trim() }); e.target.value = ''; } });
+  (function () { const cur = new URLSearchParams(location.search).get('avatar') || 'ana';
+    $('avatarPick').innerHTML = 'avatar: ' + ['ana','karim','selam','arjan','mei','nora','lukas','ingrid','hana','arun'].map(a =>
+      a === cur ? '<b>' + a + '</b>' : '<a href="?avatar=' + a + '">' + a + '</a>').join(' · '); })();
   log('page ready - waiting for the avatar (on-device driver)…');
 })();
 </script>
